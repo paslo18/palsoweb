@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Palso</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #1e3a8a 0%, #1e1e1e 100%); }
+        .neon-text { text-shadow: 0 0 10px rgba(59, 130, 246, 0.8); }
+        canvas { touch-action: none; width: 100%; max-width: 1000px; height: auto; aspect-ratio: 16 / 17; margin-top: 7rem; }
+        .account-card { background: linear-gradient(145deg, #1f2937, #374151); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); border: 1px solid rgba(59, 130, 246, 0.3); }
+        #joystickContainer { position: relative; cursor: move; width: 20vw; height: 20vw; max-width: 120px; max-height: 120px; }
+        #joystick { background: #4b5563; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); width: 100%; height: 100%; border-radius: 50%; }
+        #stick { transition: all 0.1s ease; width: 40%; height: 40%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #playButton, #pauseButton { background: linear-gradient(45deg, #22c55e, #16a34a); border: 2px solid #4ade80; box-shadow: 0 0 15px rgba(34, 197, 94, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.3); border-radius: 9999px; padding: 0.25rem 0.75rem; font-weight: 600; color: white; transition: all 0.3s ease; font-size: clamp(8px, 2vw, 12px); }
+        #playButton:hover, #pauseButton:hover { background: linear-gradient(45deg, #16a34a, #22c55e); box-shadow: 0 0 25px rgba(34, 197, 94, 0.8); transform: scale(1.05); }
+        #playButton:active, #pauseButton:active { transform: scale(0.95); }
+        #topControls { display: flex; gap: 0.25rem; align-items: center; }
+        #bottomMenu { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; background: rgba(31, 41, 55, 0.9); backdrop-filter: blur(8px); padding: 0.5rem; display: flex; justify-content: space-around; }
+        @media (max-width: 640px) {
+            canvas { width: 100%; max-width: 96vw; height: auto; margin-top: 8rem; }
+            #playButton, #pauseButton { padding: 0.25rem 0.75rem; font-size: 10px; }
+            #joystickContainer { max-width: 100px; max-height: 100px; }
+            #bottomMenu button { padding: 0.75rem; font-size: 14px; }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white font-sans overflow-x-hidden">
+    <div id="app" class="container mx-auto p-2 sm:p-4 pt-6">
+        <section id="game" class="space-y-2 sm:space-y-4 relative">
+            <div class="flex justify-between items-center px-2">
+                <div class="text-sm sm:text-base">Lives: <span id="lives">❤️❤️❤️❤️❤️</span> | Points: <span id="score">0</span></div>
+                <div id="topControls">
+                    <button id="playButton">Play</button>
+                    <button id="pauseButton">Pause</button>
+                </div>
+            </div>
+            <canvas id="gameCanvas" class="border-2 border-blue-500 rounded-lg mx-auto block"></canvas>
+            <div class="flex justify-center mt-2 sm:mt-4 space-x-4">
+                <div id="joystickContainer">
+                    <div id="joystick" class="relative flex items-center justify-center">
+                        <div id="stick" class="bg-blue-500 rounded-full"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="endCard" class="hidden absolute inset-0 flex items-center justify-center bg-black/80">
+                <div class="bg-gray-900 p-4 sm:p-8 rounded-xl text-center space-y-4 sm:space-y-6">
+                    <h2 class="text-2xl sm:text-4xl font-bold text-red-500 neon-text">You Lose!</h2>
+                    <p class="text-lg sm:text-xl">Final Points: <span id="finalScore">0</span></p>
+                    <button id="watchAdButton" onclick="earnFullLives()" class="bg-green-500 hover:bg-green-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold">
+                        Watch Ad for Full Lives
+                    </button>
+                    <p class="text-sm sm:text-base">or</p>
+                    <p id="livesTimer" class="text-sm sm:text-base">Wait 15 mins for full lives</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="earn" class="space-y-4 sm:space-y-6 text-center hidden">
+            <div class="bg-gray-800/50 p-4 sm:p-6 rounded-xl max-w-md mx-auto space-y-4">
+                <p class="mb-2 sm:mb-4 text-sm sm:text-base">Points: <span id="points">0</span></p>
+                <p id="earnMessage30" class="text-sm sm:text-base hidden">Watched! Refreshes in 7 mins.</p>
+                <button id="watch30s" onclick="watchVideo('30s')" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold w-full">
+                    Watch 30s Video, Earn 45 Points
+                </button>
+                <p id="earnMessage1" class="text-sm sm:text-base hidden">Watched! Refreshes in 7 mins.</p>
+                <button id="watch1m" onclick="watchVideo('1m')" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold w-full">
+                    Watch 1min Video, Earn 100 Points
+                </button>
+                <p id="earnMessage2" class="text-sm sm:text-base hidden">Watched! Refreshes in 7 mins.</p>
+                <button id="watch2m" onclick="watchVideo('2m')" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold w-full">
+                    Watch 2min Video, Earn 240 Points
+                </button>
+                <p id="earnMessage3" class="text-sm sm:text-base hidden">Watched! Refreshes in 7 mins.</p>
+                <button id="watch3m" onclick="watchVideo('3m')" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold w-full">
+                    Watch 3min Video, Earn 400 Points
+                </button>
+                <p id="discoverMessage" class="text-sm sm:text-base hidden">Finished! Refreshes in 7 mins.</p>
+                <button id="discoverMore" onclick="discoverMore()" class="bg-purple-500 hover:bg-purple-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold w-full">
+                    Discover More, Earn 100 Points <span class="text-xs">(<10 secs)</span>
+                </button>
+            </div>
+        </section>
+
+        <section id="referral" class="space-y-4 sm:space-y-6 text-center hidden">
+            <div class="bg-gray-800/50 p-4 sm:p-6 rounded-xl max-w-md mx-auto space-y-4">
+                <h2 class="text-lg sm:text-xl font-semibold neon-text">Referral Program</h2>
+                <p class="text-sm sm:text-base">Your Referral Link: <span id="referralLink"></span></p>
+                <button id="shareButton" onclick="shareReferral()" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 sm:px-6 sm:py-3 rounded-lg transition text-base sm:text-lg font-semibold w-full">
+                    Share
+                </button>
+                <p class="text-sm sm:text-base">No referral code needed; the system automatically tracks referrals.</p>
+                <p class="text-base sm:text-lg font-semibold text-blue-400 neon-text">Both referrer and referee earn 1 Palso coin per referral!</p>
+            </div>
+        </section>
+
+        <section id="account" class="space-y-4 sm:space-y-6 text-center hidden">
+            <div class="account-card p-4 sm:p-6 rounded-xl max-w-md mx-auto space-y-4 sm:space-y-6">
+                <div class="border-b border-gray-600 pb-2">
+                    <h3 class="text-lg sm:text-xl font-semibold neon-text">Profile</h3>
+                    <p class="text-sm sm:text-base">Username: <span id="username"></span></p>
+                    <button onclick="editUsername()" class="bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded-lg transition text-sm">Edit Username</button>
+                    <p class="text-xs sm:text-sm text-gray-400">Note: Please remember your username or everything will be lost.</p>
+                </div>
+                <div class="border-b border-gray-600 pb-2">
+                    <h3 class="text-lg sm:text-xl font-semibold neon-text">Stats</h3>
+                    <p class="text-sm sm:text-base">Total Points: <span id="totalPoints">0</span></p>
+                    <p class="text-sm sm:text-base">Games Played: <span id="gamesPlayed">0</span></p>
+                    <p class="text-sm sm:text-base">Videos Watched: <span id="videosWatched">0</span></p>
+                    <p class="text-sm sm:text-base">Palso Coins Earned: <span id="palsoCoins">0</span> (Cannot be redeemed right now)</p>
+                    <p class="text-xs sm:text-sm text-gray-400">Note: 150000 points = 1 Palso coin</p>
+                </div>
+                <div>
+                    <h3 class="text-lg sm:text-xl font-semibold neon-text">Rank</h3>
+                    <p class="text-sm sm:text-base"><span id="rank">Beginner 3</span></p>
+                </div>
+            </div>
+        </section>
+
+        <div id="bottomMenu" class="flex justify-around">
+            <button onclick="showSection('game')" class="px-2 py-1 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-600 transition neon-text">🎮</button>
+            <button onclick="showSection('earn')" class="px-2 py-1 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-600 transition neon-text">💰</button>
+            <button onclick="showSection('referral')" class="px-2 py-1 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-600 transition neon-text">🤝</button>
+            <button onclick="showSection('account')" class="px-2 py-1 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-600 transition neon-text">👤</button>
+        </div>
+    </div>
+
+    <script>
+        let telegramUsername, userData, points, gamesPlayed, videosWatched, lives, palsoCoins, referrals, lastLivesReset,
+            canvas, ctx, player, enemies, bullets, blasts, perks, bulletCount, bombActive, laserActive, perkTimers,
+            difficulty, frameCount, gameRunning = false, perkSpawnProbability, targetFPS, videoCooldowns;
+
+        const video30s = ["https://youtu.be/kLGaoYbR7LA?si=m3JDKAADxX6iRuCn"];
+        const video1m = ["https://youtu.be/rLGtnc4yDo0?si=q1NYvB1o6sJRRXVv"];
+        const video2m = ["https://youtu.be/YhvLXwmCO4E?si=n8s2HQ6YCS1KuTZw"];
+        const video3m = ["https://youtu.be/bRHS54uxinQ?si=6igbyoEP7aBMTdzR"];
+        const watchCardVideos = ["https://youtu.be/URwAFE68gmU?si=rBWimu20M46t3iSj"];
+
+        function showSection(sectionId) {
+            try {
+                document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+                const targetSection = document.getElementById(sectionId);
+                if (targetSection) {
+                    targetSection.classList.remove('hidden');
+                }
+            } catch (e) {
+                console.error("Error in showSection:", e);
+            }
+        }
+
+        function earnFullLives() {
+            try {
+                const videoUrl = watchCardVideos[Math.floor(Math.random() * watchCardVideos.length)];
+                const newWindow = window.open(videoUrl, '_blank');
+                if (!newWindow) {
+                    alert("Popup blocked. Please allow popups and try again.");
+                    return;
+                }
+                lives = 5;
+                lastLivesReset = null; // Reset timer on ad watch
+                document.getElementById('endCard').classList.add('hidden');
+                updateUI();
+                saveData();
+                setTimeout(() => alert('Ad watched! Click Play to continue!'), 500);
+            } catch (e) {
+                console.error("Error in earnFullLives:", e);
+            }
+        }
+
+        function watchVideo(duration) {
+            try {
+                let earnedPoints = duration === '30s' ? 45 : duration === '1m' ? 100 : duration === '2m' ? 240 : 400;
+                let videoList = duration === '30s' ? video30s : duration === '1m' ? video1m : duration === '2m' ? video2m : video3m;
+                const button = document.getElementById(`watch${duration}`);
+                const message = document.getElementById(`earnMessage${duration === '30s' ? '30' : duration.charAt(0)}`);
+                const videoUrl = videoList[Math.floor(Math.random() * videoList.length)];
+                const newWindow = window.open(videoUrl, '_blank');
+                if (!newWindow) {
+                    alert("Popup blocked. Please allow popups and try again.");
+                    return;
+                }
+                button.textContent = "Watched";
+                button.disabled = true;
+                button.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                button.classList.add('bg-gray-500');
+                message.classList.remove('hidden');
+                points += earnedPoints;
+                videosWatched++;
+                videoCooldowns[duration] = Date.now() + 420000;
+                updateUI();
+                saveData();
+                setTimeout(() => {
+                    button.textContent = `Watch ${duration} Video, Earn ${earnedPoints} Points`;
+                    button.disabled = false;
+                    button.classList.remove('bg-gray-500');
+                    button.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    message.classList.add('hidden');
+                    delete videoCooldowns[duration];
+                    saveData();
+                }, 420000);
+            } catch (e) {
+                console.error("Error in watchVideo:", e);
+            }
+        }
+
+        function discoverMore() {
+            try {
+                const button = document.getElementById('discoverMore');
+                const message = document.getElementById('discoverMessage');
+                const randomSites = ["https://example.com"];
+                const siteUrl = randomSites[Math.floor(Math.random() * randomSites.length)];
+                const newWindow = window.open(siteUrl, '_blank');
+                if (!newWindow) {
+                    alert("Popup blocked. Please allow popups and try again.");
+                    return;
+                }
+                button.textContent = "Finished";
+                button.disabled = true;
+                button.classList.remove('bg-purple-500', 'hover:bg-purple-600');
+                button.classList.add('bg-gray-500');
+                message.classList.remove('hidden');
+                points += 100;
+                videoCooldowns['discover'] = Date.now() + 420000;
+                updateUI();
+                saveData();
+                setTimeout(() => {
+                    button.textContent = "Discover More, Earn 100 Points (<10 secs)";
+                    button.disabled = false;
+                    button.classList.remove('bg-gray-500');
+                    button.classList.add('bg-purple-500', 'hover:bg-purple-600');
+                    message.classList.add('hidden');
+                    delete videoCooldowns['discover'];
+                    saveData();
+                }, 420000);
+            } catch (e) {
+                console.error("Error in discoverMore:", e);
+            }
+        }
+
+        function shareReferral() {
+            try {
+                const referralLink = `https://t.me/palsocoins?ref=${telegramUsername}`;
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'Join Palso!',
+                        text: 'Play Palso and earn coins with me!',
+                        url: referralLink
+                    }).catch(e => console.error("Share failed:", e));
+                } else {
+                    navigator.clipboard.write(referralLink).then(() => {
+                        alert("Referral link copied to clipboard! Share it manually.");
+                    }).catch(e => {
+                        console.error("Clipboard copy failed:", e);
+                        alert("Please copy the referral link manually: " + referralLink);
+                    });
+                }
+            } catch (e) {
+                console.error("Error in shareReferral:", e);
+            }
+        }
+
+        function editUsername() {
+            try {
+                let newUsername = prompt("Enter new username:", telegramUsername);
+                if (newUsername && newUsername !== telegramUsername) {
+                    localStorage.removeItem(telegramUsername);
+                    telegramUsername = newUsername;
+                    saveData();
+                    updateUI();
+                    alert("Username changed successfully!");
+                }
+            } catch (e) {
+                console.error("Error in editUsername:", e);
+            }
+        }
+
+        function saveData() {
+            try {
+                userData = { 
+                    points, gamesPlayed, videosWatched, lives, palsoCoins, referrals, lastLivesReset,
+                    playerX: player.x, playerY: player.y, 
+                    enemies, bullets, blasts, perks, 
+                    bulletCount, bombActive, laserActive, 
+                    perkTimers, difficulty, frameCount, perkSpawnProbability, targetFPS, videoCooldowns
+                };
+                localStorage.setItem(telegramUsername, JSON.stringify(userData));
+            } catch (e) {
+                console.error("Error saving data:", e);
+            }
+        }
+
+        function updateUI() {
+            try {
+                document.getElementById('lives').textContent = '❤️'.repeat(Math.max(0, lives));
+                document.getElementById('score').textContent = points;
+                document.getElementById('points').textContent = points;
+                document.getElementById('username').textContent = telegramUsername;
+                document.getElementById('totalPoints').textContent = points;
+                document.getElementById('gamesPlayed').textContent = gamesPlayed;
+                document.getElementById('videosWatched').textContent = videosWatched;
+                document.getElementById('palsoCoins').textContent = palsoCoins + Math.floor(points / 150000);
+                
+                if (points >= 11800000) document.getElementById('rank').textContent = 'Infinity Maverick';
+                else if (points >= 10800001) document.getElementById('rank').textContent = 'Diamond 1';
+                else if (points >= 9800001) document.getElementById('rank').textContent = 'Diamond 2';
+                else if (points >= 8800001) document.getElementById('rank').textContent = 'Diamond 3';
+                else if (points >= 7800001) document.getElementById('rank').textContent = 'Diamond 4';
+                else if (points >= 6800001) document.getElementById('rank').textContent = 'Diamond 5';
+                else if (points >= 5900001) document.getElementById('rank').textContent = 'Platinum 1';
+                else if (points >= 5000001) document.getElementById('rank').textContent = 'Platinum 2';
+                else if (points >= 4100001) document.getElementById('rank').textContent = 'Platinum 3';
+                else if (points >= 3400001) document.getElementById('rank').textContent = 'Gold 1';
+                else if (points >= 2700001) document.getElementById('rank').textContent = 'Gold 2';
+                else if (points >= 2000001) document.getElementById('rank').textContent = 'Gold 3';
+                else if (points >= 1500001) document.getElementById('rank').textContent = 'Silver 1';
+                else if (points >= 1000001) document.getElementById('rank').textContent = 'Silver 2';
+                else if (points >= 900001) document.getElementById('rank').textContent = 'Silver 3';
+                else if (points >= 600001) document.getElementById('rank').textContent = 'Beginner 1';
+                else if (points >= 300001) document.getElementById('rank').textContent = 'Beginner 2';
+                else if (points >= 100000) document.getElementById('rank').textContent = 'Beginner 3';
+                else document.getElementById('rank').textContent = 'Beginner 3';
+
+                document.getElementById('referralLink').textContent = `https://t.me/palsocoins?ref=${telegramUsername}`;
+
+                if (lives <= 0 && lastLivesReset) {
+                    const timeSinceReset = Date.now() - lastLivesReset;
+                    const waitTime = 15 * 60 * 1000;
+                    if (timeSinceReset >= waitTime) {
+                        lives = 5;
+                        lastLivesReset = null;
+                        document.getElementById('endCard').classList.add('hidden');
+                        saveData();
+                    } else {
+                        const remainingSeconds = Math.ceil((waitTime - timeSinceReset) / 1000);
+                        const minutes = Math.floor(remainingSeconds / 60);
+                        const seconds = remainingSeconds % 60;
+                        document.getElementById('livesTimer').textContent = `Wait ${minutes}m ${seconds}s for full lives`;
+                    }
+                } else if (lives <= 0) {
+                    document.getElementById('livesTimer').textContent = `Wait 15m 0s for full lives`;
+                }
+
+                ['30s', '1m', '2m', '3m', 'discover'].forEach(duration => {
+                    const button = document.getElementById(`watch${duration}`) || document.getElementById('discoverMore');
+                    const message = document.getElementById(`earnMessage${duration === '30s' ? '30' : duration === 'discover' ? '' : duration.charAt(0)}`) || document.getElementById('discoverMessage');
+                    if (videoCooldowns[duration] && Date.now() < videoCooldowns[duration]) {
+                        button.textContent = "Watched";
+                        button.disabled = true;
+                        button.classList.remove(duration === 'discover' ? 'bg-purple-500' : 'bg-blue-500', 'hover:bg-blue-600', 'hover:bg-purple-600');
+                        button.classList.add('bg-gray-500');
+                        message.classList.remove('hidden');
+                        const remainingMs = videoCooldowns[duration] - Date.now();
+                        const remainingSeconds = Math.ceil(remainingMs / 1000);
+                        const minutes = Math.floor(remainingSeconds / 60);
+                        const seconds = remainingSeconds % 60;
+                        message.textContent = `Watched! Refreshes in ${minutes}m ${seconds}s`;
+                    }
+                });
+            } catch (e) {
+                console.error("Error updating UI:", e);
+            }
+        }
+
+        window.onload = function() {
+            console.log("Page loaded, initializing game...");
+
+            telegramUsername = prompt("Enter Telegram username:");
+            if (!telegramUsername) telegramUsername = "Anonymous" + Math.floor(Math.random() * 10000);
+
+            userData = JSON.parse(localStorage.getItem(telegramUsername)) || {
+                points: 0, gamesPlayed: 0, videosWatched: 0, lives: 5, palsoCoins: 0, referrals: 0, lastLivesReset: null,
+                playerX: null, playerY: null, enemies: [], bullets: [], blasts: [], perks: [],
+                bulletCount: 1, bombActive: false, laserActive: false, 
+                perkTimers: { bullets: 0, bomb: 0, laser: 0 }, difficulty: 0.015, frameCount: 0, perkSpawnProbability: 0.001, targetFPS: 40,
+                videoCooldowns: {}
+            };
+            points = userData.points;
+            gamesPlayed = userData.gamesPlayed;
+            videosWatched = userData.videosWatched;
+            lives = userData.lives;
+            palsoCoins = userData.palsoCoins || 0;
+            referrals = userData.referrals || 0;
+            lastLivesReset = userData.lastLivesReset || null;
+            videoCooldowns = userData.videoCooldowns || {};
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+
+            function setCanvasSize() {
+                if (window.innerWidth <= 640) {
+                    canvas.width = window.innerWidth * 0.96;
+                    canvas.height = canvas.width * (17 / 16);
+                } else {
+                    canvas.width = Math.min(window.innerWidth - 20, 1000);
+                    canvas.height = canvas.width * (17 / 16);
+                }
+            }
+            setCanvasSize();
+
+            player = { 
+                x: userData.playerX || canvas.width / 2 - 20, 
+                y: userData.playerY || canvas.height - 50, 
+                width: 40, 
+                height: 40, 
+                speed: 6 
+            };
+            enemies = userData.enemies || [];
+            bullets = userData.bullets || [];
+            blasts = userData.blasts || [];
+            perks = userData.perks || [];
+            bulletCount = userData.bulletCount || 1;
+            bombActive = userData.bombActive || false;
+            laserActive = userData.laserActive || false;
+            perkTimers = userData.perkTimers || { bullets: 0, bomb: 0, laser: 0 };
+            difficulty = userData.difficulty || 0.015;
+            frameCount = userData.frameCount || 0;
+            perkSpawnProbability = userData.perkSpawnProbability || 0.001;
+            targetFPS = userData.targetFPS || 40;
+
+            function drawSpaceship(x, y) {
+                ctx.fillStyle = '#3b82f6';
+                ctx.beginPath();
+                ctx.moveTo(x + 20, y);
+                ctx.lineTo(x + 40, y + 40);
+                ctx.lineTo(x, y + 40);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#f97316';
+                ctx.beginPath();
+                ctx.moveTo(x + 25, y + 40);
+                ctx.lineTo(x + 15, y + 40);
+                ctx.lineTo(x + 20, y + 45 + Math.random() * 5);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            function drawEnemy(x, y) {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(x + 15, y + 15, 15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(x + 10, y + 10, 3, 0, Math.PI * 2);
+                ctx.arc(x + 20, y + 10, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            function drawBlast(x, y, frame) {
+                ctx.fillStyle = `rgba(255, 165, 0, ${1 - frame / 10})`;
+                ctx.beginPath();
+                ctx.arc(x + 15, y + 15, frame * 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            function drawPerk(perk) {
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const symbol = perk.type === 'life' ? '❤️' : perk.type === 'energy' ? '🔫' : perk.type === 'bomb' ? '💣' : '⚡';
+                ctx.fillText(symbol, perk.x + 20, perk.y + 20);
+            }
+
+            function drawLaser() {
+                if (!laserActive) return;
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';
+                ctx.fillRect(player.x - 100, 0, 200, canvas.height);
+            }
+
+            function spawnEnemy() {
+                enemies.push({
+                    x: Math.random() * (canvas.width - 30),
+                    y: -30,
+                    width: 30,
+                    height: 30,
+                    speed: 1.5 + difficulty * 10
+                });
+            }
+
+            function spawnPerk() {
+                const types = ['life', 'energy', 'bomb', 'laser'];
+                if (Math.random() < perkSpawnProbability) {
+                    perks.push({
+                        x: Math.random() * (canvas.width - 40),
+                        y: -40,
+                        width: 40,
+                        height: 40,
+                        speed: 2,
+                        type: types[Math.floor(Math.random() * types.length)]
+                    });
+                }
+            }
+
+            function shootBullet() {
+                const angleStep = 30 * Math.PI / 180;
+                for (let i = 0; i < bulletCount; i++) {
+                    const angleOffset = (i - (bulletCount - 1) / 2) * angleStep;
+                    const speedX = Math.sin(angleOffset) * 2;
+                    const speedY = -7;
+                    bullets.push({
+                        x: player.x + player.width / 2 - 2,
+                        y: player.y,
+                        width: 4,
+                        height: 10,
+                        speedX: speedX,
+                        speedY: speedY
+                    });
+                }
+            }
+
+            let lastFrameTime = performance.now();
+            function updateGame(timestamp) {
+                if (!gameRunning || lives <= 0) {
+                    if (lives <= 0) endGame();
+                    return;
+                }
+
+                const deltaTime = timestamp - lastFrameTime;
+                const frameInterval = 1000 / targetFPS;
+
+                if (deltaTime >= frameInterval) {
+                    lastFrameTime = timestamp - (deltaTime % frameInterval);
+
+                    try {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        drawSpaceship(player.x, player.y);
+                        drawLaser();
+
+                        enemies.forEach((enemy, i) => {
+                            enemy.y += enemy.speed;
+                            drawEnemy(enemy.x, enemy.y);
+                            if (enemy.y + enemy.height > player.y && enemy.x < player.x + player.width && enemy.x + enemy.width > player.x) {
+                                lives--;
+                                enemies.splice(i, 1);
+                                updateUI();
+                                if (lives <= 0) {
+                                    endGame();
+                                    return;
+                                }
+                            } else if (enemy.y > canvas.height) enemies.splice(i, 1);
+                            if (laserActive && enemy.x > player.x - 100 && enemy.x < player.x + 100) {
+                                points += 1;
+                                blasts.push({ x: enemy.x, y: enemy.y, frame: 0 });
+                                enemies.splice(i, 1);
+                            }
+                        });
+
+                        ctx.fillStyle = '#fff';
+                        bullets.forEach((bullet, i) => {
+                            bullet.x += bullet.speedX;
+                            bullet.y += bullet.speedY;
+                            ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                            enemies.forEach((enemy, j) => {
+                                if (bullet.y < enemy.y + enemy.height && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width) {
+                                    points += 1;
+                                    if (bombActive) {
+                                        blasts.push({ x: enemy.x, y: enemy.y, frame: 0 });
+                                        enemies.forEach((nearby, k) => {
+                                            if (Math.abs(nearby.x - enemy.x) < 100 && Math.abs(nearby.y - enemy.y) < 100) {
+                                                points += 1;
+                                                blasts.push({ x: nearby.x, y: nearby.y, frame: 0 });
+                                                enemies.splice(k, 1);
+                                            }
+                                        });
+                                    }
+                                    blasts.push({ x: enemy.x, y: enemy.y, frame: 0 });
+                                    enemies.splice(j, 1);
+                                    bullets.splice(i, 1);
+                                    updateUI();
+                                }
+                            });
+                            if (bullet.y < 0 || bullet.x < 0 || bullet.x > canvas.width) bullets.splice(i, 1);
+                        });
+
+                        blasts.forEach((blast, i) => {
+                            blast.frame++;
+                            drawBlast(blast.x, blast.y, blast.frame);
+                            if (blast.frame > 10) blasts.splice(i, 1);
+                        });
+
+                        perks.forEach((perk, i) => {
+                            perk.y += perk.speed;
+                            drawPerk(perk);
+                            if (perk.y + perk.height > player.y && perk.x < player.x + player.width && perk.x + perk.width > player.x) {
+                                if (perk.type === 'life') lives = Math.min(lives + 1, 5);
+                                else if (perk.type === 'energy') { bulletCount = 5; perkTimers.bullets = 15 * 60; }
+                                else if (perk.type === 'bomb') { bombActive = true; perkTimers.bomb = 15 * 60; }
+                                else if (perk.type === 'laser') { laserActive = true; perkTimers.laser = 15 * 60; }
+                                perks.splice(i, 1);
+                                updateUI();
+                            }
+                            if (perk.y > canvas.height) perks.splice(i, 1);
+                        });
+
+                        if (Math.random() < difficulty) spawnEnemy();
+                        spawnPerk();
+                        if (frameCount++ % 20 === 0) shootBullet();
+
+                        // Difficulty progression: Medium -> Difficult -> Hardest
+                        if (frameCount < 600) { // 0-15s at 40 FPS
+                            targetFPS = 40; // Medium
+                            difficulty = 0.015; // ~1 enemy every 1.5-2s
+                            perkSpawnProbability = 0.001; // ~1 perk every 25s
+                        } else if (frameCount < 1800) { // 15-45s at ~45 FPS
+                            targetFPS = 45; // Difficult
+                            if (frameCount % 200 === 0 && difficulty < 0.03) difficulty += 0.003; // ~1 every 0.8-1s
+                            perkSpawnProbability = 0.0015; // ~1 every 16-17s
+                        } else { // 45+s
+                            targetFPS = 50; // Hardest
+                            if (frameCount % 200 === 0 && difficulty < 0.05) difficulty += 0.005; // ~1 every 0.4-0.5s
+                            perkSpawnProbability = 0.002; // ~1 every 12-13s
+                        }
+
+                        let timerText = '';
+                        if (perkTimers.bullets > 0) {
+                            perkTimers.bullets--;
+                            timerText += `Bullets: ${Math.ceil(perkTimers.bullets / 60)}s `;
+                            if (perkTimers.bullets <= 0) bulletCount = 1;
+                        }
+                        if (perkTimers.bomb > 0) {
+                            perkTimers.bomb--;
+                            timerText += `Bomb: ${Math.ceil(perkTimers.bomb / 60)}s `;
+                            if (perkTimers.bomb <= 0) bombActive = false;
+                        }
+                        if (perkTimers.laser > 0) {
+                            perkTimers.laser--;
+                            timerText += `Laser: ${Math.ceil(perkTimers.laser / 60)}s `;
+                            if (perkTimers.laser <= 0) laserActive = false;
+                        }
+                        document.getElementById('perkTimer') ? document.getElementById('perkTimer').textContent = timerText : null;
+
+                        saveData();
+                    } catch (e) {
+                        console.error("Error in updateGame:", e);
+                        gameRunning = false;
+                    }
+                }
+                requestAnimationFrame(updateGame);
+            }
+
+            function startGame() {
+                try {
+                    if (!gameRunning) {
+                        if (lives <= 0) {
+                            document.getElementById('endCard').classList.remove('hidden');
+                            return;
+                        }
+                        gameRunning = true;
+                        enemies = [];
+                        bullets = [];
+                        blasts = [];
+                        perks = [];
+                        difficulty = 0.015;
+                        perkSpawnProbability = 0.001;
+                        targetFPS = 40;
+                        frameCount = 0;
+                        lastFrameTime = performance.now();
+                        updateGame(performance.now());
+                    }
+                } catch (e) {
+                    console.error("Error starting game:", e);
+                }
+            }
+
+            function pauseGame() {
+                try {
+                    if (gameRunning) {
+                        gameRunning = false;
+                    } else if (lives > 0) {
+                        gameRunning = true;
+                        updateGame(performance.now());
+                    }
+                } catch (e) {
+                    console.error("Error in pauseGame:", e);
+                }
+            }
+
+            function endGame() {
+                try {
+                    gameRunning = false;
+                    gamesPlayed++;
+                    if (lives <= 0 && !lastLivesReset) lastLivesReset = Date.now();
+                    document.getElementById('endCard').classList.remove('hidden');
+                    document.getElementById('finalScore').textContent = points;
+                    updateUI();
+                    saveData();
+                } catch (e) {
+                    console.error("Error in endGame:", e);
+                }
+            }
+
+            const joystickContainer = document.getElementById('joystickContainer');
+            const joystick = document.getElementById('joystick');
+            const stick = document.getElementById('stick');
+            let isDraggingJoystick = false;
+            let isDraggingStick = false;
+
+            joystickContainer.addEventListener('mousedown', startJoystickDrag);
+            joystickContainer.addEventListener('touchstart', startJoystickDrag, { passive: false });
+            joystick.addEventListener('mousedown', startStickDrag);
+            joystick.addEventListener('touchstart', startStickDrag, { passive: false });
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+
+            function startJoystickDrag(e) {
+                if (e.target === joystickContainer) {
+                    isDraggingJoystick = true;
+                    drag(e);
+                }
+            }
+
+            function startStickDrag(e) {
+                isDraggingStick = true;
+                drag(e);
+            }
+
+            function drag(e) {
+                e.preventDefault();
+                if (isDraggingJoystick) {
+                    const rect = document.body.getBoundingClientRect();
+                    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left - joystickContainer.offsetWidth / 2;
+                    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top - joystickContainer.offsetHeight / 2;
+                    joystickContainer.style.left = `${Math.max(0, Math.min(rect.width - joystickContainer.offsetWidth, x))}px`;
+                    joystickContainer.style.top = `${Math.max(0, Math.min(rect.height - joystickContainer.offsetHeight, y))}px`;
+                }
+                if (isDraggingStick && gameRunning) {
+                    const rect = joystick.getBoundingClientRect();
+                    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left - rect.width / 2;
+                    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top - rect.height / 2;
+                    const maxDist = rect.width / 3 - stick.offsetWidth / 2;
+                    const dist = Math.min(maxDist, Math.sqrt(x * x + y * y));
+                    const angle = Math.atan2(y, x);
+                    stick.style.left = `${rect.width / 2 + Math.cos(angle) * dist - stick.offsetWidth / 2}px`;
+                    stick.style.top = `${rect.height / 2 + Math.sin(angle) * dist - stick.offsetHeight / 2}px`;
+                    const sensitivityFactor = 1.2;
+                    movePlayer(Math.cos(angle) * (dist / maxDist) * sensitivityFactor, Math.sin(angle) * (dist / maxDist) * sensitivityFactor);
+                }
+            }
+
+            function movePlayer(dx, dy) {
+                player.x = Math.max(0, Math.min(canvas.width - player.width, player.x + dx * player.speed));
+                player.y = Math.max(canvas.height / 2, Math.min(canvas.height - player.height, player.y + dy * player.speed));
+            }
+
+            function endDrag() {
+                isDraggingJoystick = false;
+                isDraggingStick = false;
+                stick.style.left = '50%';
+                stick.style.top = '50%';
+                stick.style.transform = 'translate(-50%, -50%)';
+            }
+
+            document.getElementById('playButton').addEventListener('click', startGame);
+            document.getElementById('pauseButton').addEventListener('click', pauseGame);
+            document.getElementById('watchAdButton').addEventListener('click', earnFullLives);
+            document.getElementById('watch30s').addEventListener('click', () => watchVideo('30s'));
+            document.getElementById('watch1m').addEventListener('click', () => watchVideo('1m'));
+            document.getElementById('watch2m').addEventListener('click', () => watchVideo('2m'));
+            document.getElementById('watch3m').addEventListener('click', () => watchVideo('3m'));
+            document.getElementById('discoverMore').addEventListener('click', discoverMore);
+            document.getElementById('shareButton').addEventListener('click', shareReferral);
+
+            updateUI();
+            showSection('game');
+
+            window.addEventListener('resize', () => {
+                setCanvasSize();
+                player.x = Math.min(player.x, canvas.width - player.width);
+                player.y = Math.max(canvas.height / 2, Math.min(player.y, canvas.height - player.height));
+                updateUI();
+            });
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const referrer = urlParams.get('ref');
+            if (referrer && referrer !== telegramUsername) {
+                referrals++;
+                palsoCoins += 1;
+                const referrerData = JSON.parse(localStorage.getItem(referrer)) || { palsoCoins: 0, referrals: 0 };
+                referrerData.palsoCoins = (referrerData.palsoCoins || 0) + 1;
+                referrerData.referrals = (referrerData.referrals || 0) + 1;
+                localStorage.setItem(referrer, JSON.stringify(referrerData));
+                saveData();
+                alert(`Referral successful! You and ${referrer} each earned 1 Palso coin!`);
+            }
+
+            setInterval(updateUI, 1000);
+        };
+    </script>
+</body>
+</html>
